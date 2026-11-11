@@ -1,6 +1,57 @@
+import os
+import pickle
 import string
+from collections import defaultdict
 
-from .search_utils import DEFAULT_SEARCH_LIMIT, Movie, load_movies
+from nltk.stem import PorterStemmer
+
+from .search_utils import (
+    CACHE_DIR,
+    DEFAULT_SEARCH_LIMIT,
+    STOPWORDS_PATH,
+    Movie,
+    load_movies,
+)
+
+
+class InvertedIndex:
+    def __init__(self) -> None:
+        self.index = defaultdict(set)
+        self.docmap: dict[int, Movie] = {}
+        self.index_path = os.path.join(CACHE_DIR, "index.pkl")
+        self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+
+    def build(self) -> None:
+        movies = load_movies()
+        for m in movies:
+            doc_id = m["id"]
+            doc_description = f"{m['title']} {m['description']}"
+            self.docmap[doc_id] = m
+            self.__add_document(doc_id, doc_description)
+
+    def save(self) -> None:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(self.index_path, "wb") as f:
+            pickle.dump(self.index, f)
+        with open(self.docmap_path, "wb") as f:
+            pickle.dump(self.docmap, f)
+
+    def get_documents(self, term: str) -> list[int]:
+        doc_ids = self.index.get(term, set())
+        return sorted(doc_ids)
+
+    def __add_document(self, doc_id: int, text: str) -> None:
+        tokens = tokenize_text(text)
+        for token in set(tokens):
+            self.index[token].add(doc_id)
+
+
+def build_command() -> None:
+    idx = InvertedIndex()
+    idx.build()
+    idx.save()
+    docs = idx.get_documents("merida")
+    print(f"First document for token 'merida' = {docs[0]}")
 
 
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[Movie]:
@@ -13,13 +64,8 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[Movie]
             results.append(movie)
             if len(results) >= limit:
                 break
+
     return results
-
-
-def preprocess_text(text: str) -> str:
-    translator = str.maketrans("", "", string.punctuation)
-    text = text.lower().translate(translator)
-    return text
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
@@ -30,6 +76,20 @@ def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool
     return False
 
 
+def preprocess_text(text: str) -> str:
+    text = text.lower()
+    text = text.translate(str.maketrans("", "", string.punctuation))
+    return text
+
+
+def load_stopwords() -> list[str]:
+    with open(STOPWORDS_PATH, "r") as f:
+        return [preprocess_text(word) for word in f.read().splitlines()]
+
+
+STOPWORDS = load_stopwords()
+
+
 def tokenize_text(text: str) -> list[str]:
     text = preprocess_text(text)
     tokens = text.split()
@@ -37,4 +97,13 @@ def tokenize_text(text: str) -> list[str]:
     for token in tokens:
         if token:
             valid_tokens.append(token)
-    return valid_tokens
+    filtered_words = []
+    for word in valid_tokens:
+        if word not in STOPWORDS:
+            filtered_words.append(word)
+    stemmer = PorterStemmer()
+    stemmed_words = []
+    for word in filtered_words:
+        stemmed = stemmer.stem(word)
+        stemmed_words.append(stemmed)
+    return stemmed_words
