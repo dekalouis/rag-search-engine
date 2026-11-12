@@ -1,7 +1,7 @@
 import os
 import pickle
 import string
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from nltk.stem import PorterStemmer
 
@@ -18,8 +18,10 @@ class InvertedIndex:
     def __init__(self) -> None:
         self.index = defaultdict(set)
         self.docmap: dict[int, Movie] = {}
+        self.term_frequencies = defaultdict(Counter)
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
+        self.tf_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
 
     def build(self) -> None:
         movies = load_movies()
@@ -29,12 +31,25 @@ class InvertedIndex:
             self.docmap[doc_id] = m
             self.__add_document(doc_id, doc_description)
 
+    def load(self) -> None:
+        with open(self.index_path, "rb") as f:
+            self.index = pickle.load(f)
+        with open(self.docmap_path, "rb") as f:
+            self.docmap = pickle.load(f)
+        with open(self.tf_path, "rb") as f:
+            self.term_frequencies = pickle.load(f)
+
     def save(self) -> None:
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(self.index_path, "wb") as f:
             pickle.dump(self.index, f)
         with open(self.docmap_path, "wb") as f:
             pickle.dump(self.docmap, f)
+        with open(self.tf_path, "wb") as f:
+            pickle.dump(self.term_frequencies, f)
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        return self.term_frequencies.get(doc_id, {}).get(term, 0)
 
     def get_documents(self, term: str) -> list[int]:
         doc_ids = self.index.get(term, set())
@@ -42,6 +57,7 @@ class InvertedIndex:
 
     def __add_document(self, doc_id: int, text: str) -> None:
         tokens = tokenize_text(text)
+        self.term_frequencies[doc_id].update(tokens)
         for token in set(tokens):
             self.index[token].add(doc_id)
 
@@ -50,30 +66,25 @@ def build_command() -> None:
     idx = InvertedIndex()
     idx.build()
     idx.save()
-    docs = idx.get_documents("merida")
-    print(f"First document for token 'merida' = {docs[0]}")
 
 
 def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[Movie]:
-    movies = load_movies()
-    results = []
-    for movie in movies:
-        query_tokens = tokenize_text(query)
-        title_tokens = tokenize_text(movie["title"])
-        if has_matching_token(query_tokens, title_tokens):
-            results.append(movie)
-            if len(results) >= limit:
-                break
+    idx = InvertedIndex()
+    idx.load()
+    query_tokens = tokenize_text(query)
+    seen, results = set(), []
 
-    return results
-
-
-def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
     for query_token in query_tokens:
-        for title_token in title_tokens:
-            if query_token in title_token:
-                return True
-    return False
+        matching_doc_ids = idx.get_documents(query_token)
+        for doc_id in matching_doc_ids:
+            if doc_id in seen:
+                continue
+            seen.add(doc_id)
+            doc = idx.docmap[doc_id]
+            results.append(doc)
+            if len(results) >= limit:
+                return results
+    return results
 
 
 def preprocess_text(text: str) -> str:
@@ -107,3 +118,16 @@ def tokenize_text(text: str) -> list[str]:
         stemmed = stemmer.stem(word)
         stemmed_words.append(stemmed)
     return stemmed_words
+
+
+def tokenize_single_term(term: str) -> str:
+    tokens = tokenize_text(term)
+    if len(tokens) != 1:
+        raise ValueError("expected only 1 token")
+    return tokens[0]
+
+
+def tf_command(doc_id: int, term: str) -> int:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_tf(doc_id, tokenize_single_term(term))
