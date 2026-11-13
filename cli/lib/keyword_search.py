@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 import string
@@ -6,6 +7,7 @@ from collections import Counter, defaultdict
 from nltk.stem import PorterStemmer
 
 from .search_utils import (
+    BM25_K1,
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
     STOPWORDS_PATH,
@@ -16,9 +18,9 @@ from .search_utils import (
 
 class InvertedIndex:
     def __init__(self) -> None:
-        self.index = defaultdict(set)
+        self.index: defaultdict[str, set[int]] = defaultdict(set)
         self.docmap: dict[int, Movie] = {}
-        self.term_frequencies = defaultdict(Counter)
+        self.term_frequencies: defaultdict[int, Counter[str]] = defaultdict(Counter)
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
         self.tf_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
@@ -50,6 +52,29 @@ class InvertedIndex:
 
     def get_tf(self, doc_id: int, term: str) -> int:
         return self.term_frequencies.get(doc_id, {}).get(term, 0)
+
+    def get_idf(self, term: str) -> float:
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index.get(term, set()))
+        return math.log((doc_count + 1) / (term_doc_count + 1))
+
+    def get_tfidf(self, doc_id: int, term: str) -> float:
+        tf = self.get_tf(doc_id, term)
+        idf = self.get_idf(term)
+        return tf * idf
+
+    def get_bm25_idf(self, term: str) -> float:
+        doc_count = len(self.docmap)
+        term_doc_count = len(self.index.get(term, set()))
+        bm25_idf = math.log(
+            ((doc_count - term_doc_count + 0.5) / (term_doc_count + 0.5)) + 1
+        )
+        return bm25_idf
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1=BM25_K1) -> float:
+        tf = self.get_tf(doc_id, term)
+        bm25_tf = (tf * (k1 + 1)) / (tf + k1)
+        return bm25_tf
 
     def get_documents(self, term: str) -> list[int]:
         doc_ids = self.index.get(term, set())
@@ -131,3 +156,27 @@ def tf_command(doc_id: int, term: str) -> int:
     idx = InvertedIndex()
     idx.load()
     return idx.get_tf(doc_id, tokenize_single_term(term))
+
+
+def idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_idf(tokenize_single_term(term))
+
+
+def tfidf_command(doc_id: int, term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_tfidf(doc_id, tokenize_single_term(term))
+
+
+def bm25_idf_command(term: str) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_bm25_idf(tokenize_single_term(term))
+
+
+def bm25_tf_command(doc_id: int, term: str, k1: float) -> float:
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_bm25_tf(doc_id, tokenize_single_term(term))
