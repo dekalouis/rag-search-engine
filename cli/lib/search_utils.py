@@ -25,6 +25,9 @@ class SearchResult(TypedDict):
 # class GoldenDataset(TypedDict):
 #     test_cases: list[str]
 
+DEFAULT_ALPHA = 0.5
+RRF_K = 60
+SEARCH_MULTIPLIER = 5
 
 DEFAULT_SEARCH_LIMIT = 5
 DOCUMENT_PREVIEW_LENGTH = 100
