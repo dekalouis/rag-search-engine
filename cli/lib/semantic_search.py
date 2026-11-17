@@ -204,3 +204,5 @@ def semantic_chunk_text(
 ) -> None:
     chunks = semantic_chunk(text, max_chunk_size, overlap)
     print(f"Semantically chunking {len(text)} characters")
+    for i, chunk in enumerate(chunks):
+        print(f"{i + 1}. {chunk}")
