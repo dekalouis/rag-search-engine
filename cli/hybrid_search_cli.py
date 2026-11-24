@@ -51,6 +51,8 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
+    rrf_parser.add_argument("--rerank-method", type=str, choices=["individual"])
+
     args = parser.parse_args()
 
     match args.command:
@@ -77,7 +79,13 @@ def main() -> None:
                 print(f"   {res['document'][:100]}...")
                 print()
         case "rrf-search":
-            result = rrf_search_command(args.query, args.k, args.enhance, args.limit)
+            result = rrf_search_command(
+                args.query,
+                args.k,
+                args.enhance,
+                args.limit,
+                rerank_method=args.rerank_method,
+            )
 
             if result["enhanced_query"]:
                 print(
@@ -88,9 +96,11 @@ def main() -> None:
                 )
 
             for i, res in enumerate(result["results"], 1):
-                print(f"{i}. {res['title']}")
-                print(f"   RRF Score: {res.get('score', 0):.3f}")
                 metadata = res.get("metadata", {})
+                print(f"\n{i}. {res['title']}")
+                if "rerank_score" in metadata:
+                    print(f"   Re-rank Score: {metadata['rerank_score']:.3f}/10")
+                print(f"   RRF Score: {res.get('score', 0):.3f}")
                 ranks = []
                 if metadata.get("bm25_rank"):
                     ranks.append(f"BM25 Rank: {metadata['bm25_rank']}")
@@ -99,7 +109,6 @@ def main() -> None:
                 if ranks:
                     print(f"   {', '.join(ranks)}")
                 print(f"   {res['document'][:100]}...")
-                print()
         case _:
             parser.print_help()
 
