@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 from lib.hybrid_search import (
     normalize_scores,
@@ -51,9 +52,17 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
-    rrf_parser.add_argument("--rerank-method", type=str, choices=["individual"])
+    rrf_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual", "batch", "cross_encoder"],
+    )
 
     args = parser.parse_args()
+
+    logging.basicConfig(
+        filename="debug.log", level=logging.DEBUG, format="%(asctime)s%(message)s"
+    )
 
     match args.command:
         case "normalize":
@@ -100,6 +109,12 @@ def main() -> None:
                 print(f"\n{i}. {res['title']}")
                 if "rerank_score" in metadata:
                     print(f"   Re-rank Score: {metadata['rerank_score']:.3f}/10")
+                if "batch_rank" in res:
+                    print(f"   Re-rank Rank: {res.get('batch_rank', 0):.3f}")
+                if "crossencoder_score" in res:
+                    print(
+                        f"   Cross Encoder Score: {res.get('crossencoder_score', 0):.3f}"
+                    )
                 print(f"   RRF Score: {res.get('score', 0):.3f}")
                 ranks = []
                 if metadata.get("bm25_rank"):

@@ -1,9 +1,10 @@
+from logging import getLogger
 import os
 from typing import Literal, TypedDict
 
 from .keyword_search import InvertedIndex
 from .query_enhancement import enhance_query
-from .reranking import rerank_individual
+from .reranking import cross_encoder_rerank, llm_rerank_batch, rerank_individual
 from .search_utils import (
     DEFAULT_ALPHA,
     DEFAULT_SEARCH_LIMIT,
@@ -14,6 +15,8 @@ from .search_utils import (
     load_movies,
 )
 from .semantic_search import ChunkedSemanticSearch
+
+logger = getLogger(__name__)
 
 
 class CombinedScoreData(TypedDict):
@@ -44,7 +47,7 @@ class RRFSearchCommandResult(TypedDict):
     enhance_method: Literal["spell", "rewrite", "expand"] | None
     query: str
     k: int
-    rerank_methid: Literal["individual"] | None
+    rerank_method: Literal["individual", "batch", "cross_encoder"] | None
     results: list[SearchResult]
 
 
@@ -248,24 +251,33 @@ def rrf_search_command(
     k: int = RRF_K,
     enhance: Literal["spell", "rewrite", "expand"] | None = None,
     limit: int = DEFAULT_SEARCH_LIMIT,
-    rerank_method: Literal["individual"] | None = None,
+    rerank_method: Literal["individual", "batch", "cross_encoder"] | None = None,
 ) -> RRFSearchCommandResult:
     movies = load_movies()
     searcher = HybridSearch(movies)
 
     original_query = query
+    logger.debug("original query: %r", query)
+
     enhanced_query = None
     if enhance:
         enhanced_query = enhance_query(query, method=enhance)
         query = enhanced_query
+    logger.debug("enhanced query: %r", query)
 
     search_limit = limit * 5 if rerank_method else limit
     results = searcher.rrf_search(query, k, search_limit)
+    logger.debug("rrf results: %s", [(r["titles"], r["score"]) for r in results])
 
     if rerank_method == "individual":
         print(f"Re-ranking top {limit} results using individual method...")
         results = rerank_individual(query, results, limit)
-
+    if rerank_method == "batch":
+        print(f"Re-ranking top {limit} results using batch method...")
+        results = llm_rerank_batch(query, results, limit)
+    if rerank_method == "cross_encoder":
+        print(f"Re-ranking top {limit} results using cross encoder method...")
+        results = cross_encoder_rerank(query, results, limit)
     return {
         "original_query": original_query,
         "enhanced_query": enhanced_query,

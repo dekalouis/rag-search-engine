@@ -17,13 +17,14 @@ class SearchResult(TypedDict):
     metadata: dict[str, Any]
 
 
-#
-# class GoldenTestCase(TypedDict):
-#     query: str
-#     relevant_docs: list[str]
-#
-# class GoldenDataset(TypedDict):
-#     test_cases: list[str]
+class GoldenTestCase(TypedDict):
+    query: str
+    relevant_docs: list[str]
+
+
+class GoldenDataset(TypedDict):
+    test_cases: list[GoldenTestCase]
+
 
 DEFAULT_ALPHA = 0.5
 RRF_K = 60
@@ -80,3 +81,8 @@ def format_search_result(
         "score": round(score, SCORE_PRECISION),
         "metadata": metadata if metadata else {},
     }
+
+
+def load_golden_dataset() -> GoldenDataset:
+    with open(GOLDEN_DATASET_PATH, "r") as f:
+        return json.load(f)
