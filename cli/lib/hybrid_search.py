@@ -1,5 +1,5 @@
-from logging import getLogger
 import os
+from logging import getLogger
 from typing import Literal, TypedDict
 
 from .keyword_search import InvertedIndex
@@ -267,7 +267,7 @@ def rrf_search_command(
 
     search_limit = limit * 5 if rerank_method else limit
     results = searcher.rrf_search(query, k, search_limit)
-    logger.debug("rrf results: %s", [(r["titles"], r["score"]) for r in results])
+    logger.debug("rrf results: %s", [(r["title"], r["score"]) for r in results])
 
     if rerank_method == "individual":
         print(f"Re-ranking top {limit} results using individual method...")
@@ -276,8 +276,10 @@ def rrf_search_command(
         print(f"Re-ranking top {limit} results using batch method...")
         results = llm_rerank_batch(query, results, limit)
     if rerank_method == "cross_encoder":
-        print(f"Re-ranking top {limit} results using cross encoder method...")
+        print(f"Re-ranking top {limit} results using cross_encoder method...")
         results = cross_encoder_rerank(query, results, limit)
+
+    logger.debug("rrf results: %s", [(r["title"], r["score"]) for r in results])
     return {
         "original_query": original_query,
         "enhanced_query": enhanced_query,

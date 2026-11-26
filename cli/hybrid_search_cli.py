@@ -1,6 +1,7 @@
 import argparse
 import logging
 
+from lib.evaluation import llm_judge_results
 from lib.hybrid_search import (
     normalize_scores,
     rrf_search_command,
@@ -57,11 +58,14 @@ def main() -> None:
         type=str,
         choices=["individual", "batch", "cross_encoder"],
     )
+    rrf_parser.add_argument(
+        "--evaluate", action="store_true", help="Use an LLM to rate result relevance"
+    )
 
     args = parser.parse_args()
 
     logging.basicConfig(
-        filename="debug.log", level=logging.DEBUG, format="%(asctime)s%(message)s"
+        filename="debug.log", level=logging.DEBUG, format="%(asctime)s - %(message)s"
     )
 
     match args.command:
@@ -124,6 +128,14 @@ def main() -> None:
                 if ranks:
                     print(f"   {', '.join(ranks)}")
                 print(f"   {res['document'][:100]}...")
+
+            if args.evaluate:
+                print("LLM Evaluation (0-3 relevance scale):")
+                llm_scores = llm_judge_results(args.query, result["results"])
+                for i in range(len(llm_scores)):
+                    print(
+                        f"{i + 1}. {result['results'][i]['title']}: {llm_scores[i]}/3"
+                    )
         case _:
             parser.print_help()
 
